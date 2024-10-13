@@ -3,10 +3,12 @@ use std::{
     fs::{self, File},
     io::Write,
     path::PathBuf,
+    thread::{self},
+    time::Duration,
 };
 
 use anyhow::Context;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Days, Utc};
 
 /// A time-series database.
 #[derive(Debug)]
@@ -16,8 +18,10 @@ pub struct Database {
 }
 
 impl Database {
-    /// Creates a new database.
-    pub fn new() -> Self {
+    /// Starts a new database instance.
+    pub fn start() -> Self {
+        thread::spawn(|| Self::clean());
+
         Self {
             metric_to_storage: HashMap::new(),
         }
@@ -61,6 +65,35 @@ impl Database {
             .with_context(|| format!("failed to create metric file {}", storage_path.display()))?;
 
         Ok(storage_file)
+    }
+
+    /// Cleans up files older than one week.
+    fn clean() {
+        loop {
+            for dir in fs::read_dir("database")
+                .unwrap()
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .filter(|entry| entry.is_dir())
+            {
+                for file in dir
+                    .read_dir()
+                    .unwrap()
+                    .filter_map(Result::ok)
+                    .filter(|entry| {
+                        let mod_time: DateTime<Utc> =
+                            entry.metadata().unwrap().modified().unwrap().into();
+                        let cutoff = Utc::now().checked_sub_days(Days::new(7)).unwrap();
+                        mod_time < cutoff
+                    })
+                    .map(|entry| entry.path())
+                {
+                    fs::remove_file(file).unwrap();
+                }
+            }
+
+            thread::sleep(Duration::from_secs(3600));
+        }
     }
 }
 

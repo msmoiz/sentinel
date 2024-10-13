@@ -14,7 +14,7 @@ use std::thread;
 fn main() {
     log::init();
 
-    let database = Database::new();
+    let database = Database::start();
     let reporter = DatabaseReporter::from_database(database);
     let _guard = metrics::reporter::set_reporter(reporter);
 
