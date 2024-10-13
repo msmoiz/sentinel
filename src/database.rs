@@ -9,6 +9,7 @@ use anyhow::Context;
 use chrono::{DateTime, Utc};
 
 /// A time-series database.
+#[derive(Debug)]
 pub struct Database {
     /// A map of metric names to active storage files.
     metric_to_storage: HashMap<String, File>,
