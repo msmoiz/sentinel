@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::Context;
-use chrono::{DateTime, Days, Utc};
+use chrono::{DateTime, Days, TimeZone, Utc};
 
 /// A time-series database.
 #[derive(Debug)]
@@ -67,6 +67,33 @@ impl Database {
         Ok(storage_file)
     }
 
+    /// Returns metric datapoints.
+    ///
+    /// Metrics are sorted in chronological order and are returned as time-value
+    /// pairs.
+    pub fn get_metrics(&self, name: String) -> Vec<(u64, f64)> {
+        let mut metrics = Vec::new();
+
+        let storage_dir = PathBuf::from("database").join(name);
+
+        for storage_file in storage_dir
+            .read_dir()
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+        {
+            let bytes = fs::read(storage_file).unwrap();
+            for chunk in bytes.chunks_exact(16) {
+                let metric = Metric::from_bytes(chunk);
+                metrics.push((metric.time.timestamp() as u64, metric.value));
+            }
+        }
+
+        metrics.sort_by(|x, y| x.0.cmp(&y.0));
+
+        metrics
+    }
+
     /// Cleans up files older than one week.
     fn clean() {
         loop {
@@ -98,7 +125,7 @@ impl Database {
 }
 
 /// An internal representation of a metric.
-struct Metric {
+pub struct Metric {
     /// The value of the metric.
     value: f64,
     /// The timestamp associated with the metric.
@@ -111,5 +138,14 @@ impl Metric {
         let value = self.value.to_be_bytes();
         let time = (self.time.timestamp() as u64).to_be_bytes();
         value.into_iter().chain(time.into_iter()).collect()
+    }
+
+    /// Deserializes this object from bytes.
+    fn from_bytes(bytes: &[u8]) -> Self {
+        let value = f64::from_be_bytes(bytes[..8].try_into().unwrap());
+        let time = Utc
+            .timestamp_opt(u64::from_be_bytes(bytes[8..].try_into().unwrap()) as i64, 0)
+            .unwrap();
+        Self { value, time }
     }
 }

@@ -1,19 +1,17 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::database::Database;
 
 /// A metric reporter that forwards metrics to a local metrics database.
 #[derive(Debug)]
 pub struct DatabaseReporter {
-    database: Mutex<Database>,
+    database: Arc<Mutex<Database>>,
 }
 
 impl DatabaseReporter {
     /// Creates a new reporter.
-    pub fn from_database(database: Database) -> Self {
-        Self {
-            database: Mutex::new(database),
-        }
+    pub fn from_database(database: Arc<Mutex<Database>>) -> Self {
+        Self { database }
     }
 }
 
